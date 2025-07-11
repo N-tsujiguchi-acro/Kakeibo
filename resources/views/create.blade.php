@@ -39,6 +39,7 @@
     </form>
 
 
-    <p><a href="/">一覧に戻る</a></p>
+   <p><a href="{{ route('kakeibo.index') }}">一覧に戻る</a></p>
+
 </body>
 </html>

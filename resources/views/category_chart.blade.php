@@ -7,7 +7,7 @@
      <link rel="stylesheet" href="{{ asset('css/style.css') }}">
 </head>
 <body>
-    <h1>カテゴリー別支出合計グラフ</h1>
+    <h1>当月カテゴリー別支出合計グラフ</h1>
 
     <canvas id="categoryChart" width="400" height="400"></canvas>
 

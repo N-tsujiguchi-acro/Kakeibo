@@ -7,20 +7,16 @@ use App\Models\Kakeibo;
 use App\Models\Category;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Budget;
 
 class KakeiboController extends Controller
 {
     //
     public function index()
     {
-        $userId = Auth::id(); // ログインユーザーのIDを取得
-
-        // ログインユーザーのデータだけ取得
-        $items = Kakeibo::where('user_id', $userId)
-                        ->orderBy('date', 'desc')
-                        ->get();
-
-        return view('index', compact('items'));
+        $userId = Auth::id();
+        [$items, $budgetSummaries] = $this->getItemsAndBudgetsByMonth($userId); // ← 月なし
+        return view('index', compact('items', 'budgetSummaries'));
     }
 
     public function create(){
@@ -84,31 +80,52 @@ class KakeiboController extends Controller
         return redirect('/')->with('success', '家計簿を削除しました。');
     }
 
-    public function chart()
+    public function chart(Request $request)
     {
-        $userId = Auth::id(); // ← ログイン中のユーザーIDを取得
+        $userId = Auth::id();
+        $selectedYear = $request->input('year', now()->year); // デフォルトは今年
 
+        // 1〜12月を初期化
+        $monthlyTotals = collect(range(1, 12))->mapWithKeys(function ($month) use ($selectedYear) {
+            return [sprintf('%04d-%02d', $selectedYear, $month) => 0];
+        });
+
+        // DBから該当年の月別合計を取得
         $monthlyData = DB::table('kakeibos')
             ->select(
                 DB::raw("DATE_FORMAT(date, '%Y-%m') as month"),
                 DB::raw('SUM(amount) as total')
             )
-            ->where('user_id', $userId) // ★ ログイン中のユーザーだけに限定
+            ->where('user_id', $userId)
+            ->whereYear('date', $selectedYear)
+            ->whereNull('deleted_at')  // ← ここで論理削除済みを除外
             ->groupBy('month')
             ->orderBy('month')
             ->get();
 
-        return view('chart', compact('monthlyData'));
+        // 取得データをマージ（無い月は0円のまま）
+        foreach ($monthlyData as $row) {
+            $monthlyTotals[$row->month] = $row->total;
+        }
+
+        return view('chart', [
+            'monthlyTotals' => $monthlyTotals,
+            'selectedYear' => $selectedYear,
+        ]);
     }
+
 
     public function categoryChart()
     {
         $userId = Auth::id(); // ログイン中のユーザーIDを取得
+        $currentMonth = now()->format('Y-m'); // 例: '2025-07'
 
-        // このユーザーのカテゴリーごとの支出合計を取得
+        // 当月のユーザーのカテゴリーごとの支出合計を取得（論理削除されていないレコードのみ）
         $data = DB::table('kakeibos')
             ->select('category_id', DB::raw('SUM(amount) as total'))
-            ->where('user_id', $userId) // ← ★ユーザーで絞り込み！
+            ->where('user_id', $userId)
+            ->where('date', 'like', $currentMonth . '%')
+            ->whereNull('deleted_at')  // ← ここで論理削除を除外
             ->groupBy('category_id')
             ->get();
 
@@ -129,20 +146,59 @@ class KakeiboController extends Controller
         return view('category_chart', compact('chartData'));
     }
 
-    //家計簿一覧を月で絞り込むとき
+
     public function filterByMonth(Request $request)
     {
-        //dd($request->query());
-        
+        $userId = Auth::id();
         $month = $request->input('month'); // 例: '2025-07'
-      
 
-
-        // 指定月のデータ取得
-        $items = Kakeibo::where('date', 'like', $month . '%')->get();
-
-        return view('index', compact('items'));
+        [$items, $budgetSummaries] = $this->getItemsAndBudgetsByMonth($userId, $month); // ← 月あり
+        return view('index', compact('items', 'budgetSummaries'));
     }
+
+
+    private function getItemsAndBudgetsByMonth($userId, $month = null)
+    {
+        // 家計簿一覧（全件または月ごと）
+        $itemsQuery = Kakeibo::with('category')
+            ->where('user_id', $userId)
+            ->orderBy('date', 'desc');
+
+        if ($month) {
+            $itemsQuery->where('date', 'like', $month . '%');
+        }
+
+        $items = $itemsQuery->get();
+
+        // カテゴリ別支出（常に今月分）
+        $budgetMonth = $month ?? now()->format('Y-m');
+
+        $spendPerCategory = Kakeibo::where('user_id', $userId)
+            ->where('date', 'like', $budgetMonth . '%')
+            ->select('category_id', DB::raw('SUM(amount) as total'))
+            ->groupBy('category_id')
+            ->pluck('total', 'category_id');
+
+        // 予算データ取得
+        $budgets = Budget::with('category')
+            ->where('user_id', $userId)
+            ->where('month', $budgetMonth)
+            ->get();
+
+        $budgetSummaries = [];
+
+        foreach ($budgets as $budget) {
+            $spent = $spendPerCategory[$budget->category_id] ?? 0;
+            $budgetSummaries[] = [
+                'category_name' => $budget->category->category_name ?? '未分類',
+                'budget' => $budget->amount,
+                'spent' => $spent,
+            ];
+        }
+
+        return [$items, $budgetSummaries];
+    }
+
 
 
 }

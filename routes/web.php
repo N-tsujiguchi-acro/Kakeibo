@@ -5,6 +5,7 @@ use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthenticatedSessionController; // ← 追加！
+use App\Http\Controllers\BudgetController;
 
 
 /*
@@ -67,6 +68,12 @@ Route::middleware('auth')->group(function () {
         ->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])
         ->name('profile.destroy');
+
+    Route::get('/budgets', [BudgetController::class, 'index'])->name('budgets.index');
+    Route::get('/budgets/create', [BudgetController::class, 'create'])->name('budgets.create');
+    Route::post('/budgets', [BudgetController::class, 'store'])->name('budgets.store');
+    Route::get('/budgets/{id}/edit', [BudgetController::class, 'edit'])->name('budgets.edit');
+    Route::put('/budgets/{id}', [BudgetController::class, 'update'])->name('budgets.update');
 });
 
 require __DIR__.'/auth.php';

@@ -16,7 +16,7 @@
             {{ __('Log Out') }}
         </x-responsive-nav-link>
     </form>
-
+    <p><a href="{{ route('budgets.index') }}">＋ 予算を管理する</a></p>
     {{-- 登録ページへのリンク --}}
     <p><a href="{{ route('kakeibo.create') }}">＋ 新しい家計簿を追加</a></p>
     <p><a href="{{ route('kakeibo.chart') }}">📊 月別支出グラフを見る</a></p>
@@ -50,5 +50,31 @@
             </li>
         @endforeach
     </ul>
+     <h2>今月のカテゴリ別 予算状況</h2>
+        <table border="1" cellpadding="8" style="margin-top: 20px;">
+            <tr>
+                <th>カテゴリ</th>
+                <th>予算</th>
+                <th>実支出</th>
+                <th>残額</th>
+                <th>範囲内</th>
+            </tr>
+            @foreach($budgetSummaries as $summary)
+                <tr>
+                    <td>{{ $summary['category_name'] }}</td>
+                    <td>¥{{ number_format($summary['budget']) }}</td>
+                    <td>¥{{ number_format($summary['spent']) }}</td>
+                    <td>¥{{ number_format($summary['budget'] - $summary['spent']) }}</td>
+                    <td>
+                        @if ($summary['spent'] > $summary['budget'])
+                            <span style="color: red;">⚠ 予算オーバー</span>
+                        @else
+                            <span style="color: green;">⭕ 範囲内</span>
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+
+        </table>
 </body>
 </html>
